@@ -377,7 +377,7 @@ class AIResponseComparisonTest:
 
     def save_results(self) -> None:
         """결과를 JSON 파일로 저장"""
-        output_dir = Path("scripts/output")
+        output_dir = Path(__file__).parent / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -448,7 +448,7 @@ class AIResponseComparisonTest:
 
     def generate_report(self) -> None:
         """Markdown 비교 보고서 생성"""
-        output_dir = Path("scripts/output")
+        output_dir = Path(__file__).parent / "output"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_file = output_dir / f"comparison_report_{timestamp}.md"
 
