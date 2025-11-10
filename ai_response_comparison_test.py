@@ -422,7 +422,7 @@ class AIResponseComparisonTest:
 
     def evaluate_response(self, response: str, expected_elements: List[str]) -> tuple:
         """
-        응답 자동 평가 (휴리스틱 기반)
+        응답 자동 평가 (개선된 평가 시스템)
 
         Args:
             response: AI 응답
@@ -431,36 +431,117 @@ class AIResponseComparisonTest:
         Returns:
             tuple: (점수, 별점 문자열)
         """
-        score = 0
+        import re
+
+        score = 0.0
         max_score = len(expected_elements)
 
-        # 키워드 매칭 규칙
+        # 확장된 키워드 매칭 규칙 (부분 점수 지원)
         keywords_map = {
-            "공감": ["네요", "그렇", "이해", "그러"],
-            "질문": ["?", "어때", "어떠", "시나요", "세요?"],
-            "친근함": ["!", "정말", "참"],
-            "위로": ["괜찮", "힘내", "대해", "괜찮"],
-            "긍정적 방향": ["좋", "괜찮", "함께"],
-            "의료조언 회피": [],  # 의료 용어가 없으면 통과
-            "관심": ["어떠", "괜찮", "어때"],
-            "이전 대화 언급": ["공원", "또", "역시", "전에"],
-            "자연스러운 연결": ["오늘도", "또", "다시"],
-            "구체적 질문": ["?", "어떠", "어때"],
-            "이전 대화 기억": ["손자", "시험", "공원", "친구"],
-            "함께 기뻐하기": ["축하", "잘됐", "다행", "좋", "기쁘"]
+            "공감": {
+                "strong": ["외로우실", "힘드시", "불편하시", "걱정", "아프시", "슬프시"],  # 1.0점
+                "medium": ["네요", "그렇", "이해", "그러시", "마음"],  # 0.7점
+                "weak": []  # 0.3점
+            },
+            "위로": {
+                "strong": ["함께 있을게", "곁에서", "제가 있", "걱정 마세", "위로"],  # 1.0점
+                "medium": ["괜찮", "힘내", "잘 될", "나아질"],  # 0.7점
+                "weak": []
+            },
+            "긍정적 방향": {
+                "strong": ["함께", "같이", "이야기 나누", "대화"],  # 1.0점
+                "medium": ["좋", "괜찮", "나아", "기분 전환"],  # 0.7점
+                "weak": []
+            },
+            "친근함": {
+                "strong": ["!", "정말", "참", "딱", "아주"],  # 1.0점
+                "medium": ["네요", "좋네요", "그렇네요"],  # 0.7점
+                "weak": []
+            },
+            "관심": {
+                "strong": ["어떠", "어때", "어떻게", "괜찮", "많이", "혹시"],  # 1.0점
+                "medium": ["요즘", "최근", "오늘"],  # 0.5점
+                "weak": []
+            },
+            "이전 대화 언급": {
+                "strong": ["공원", "산책", "친구", "손자", "시험"],  # 1.0점 (명시적 언급)
+                "medium": ["또", "역시", "전에", "지난번"],  # 0.7점
+                "weak": ["오늘도", "다시"]  # 0.5점
+            },
+            "자연스러운 연결": {
+                "strong": ["오늘도", "또", "다시", "역시"],  # 1.0점
+                "medium": [],
+                "weak": []
+            },
+            "이전 대화 기억": {
+                "strong": ["손자", "시험", "공원", "친구", "산책"],  # 1.0점 (구체적 기억)
+                "medium": [],
+                "weak": []
+            },
+            "함께 기뻐하기": {
+                "strong": ["축하", "기쁘", "잘됐", "다행", "자랑스", "대단"],  # 1.0점
+                "medium": ["좋", "멋지", "훌륭"],  # 0.7점
+                "weak": []
+            }
         }
 
         # 의료 조언 금지 키워드
-        medical_keywords = ["병원", "의사", "약", "치료", "진료", "처방"]
+        medical_keywords = ["병원", "의사", "약", "치료", "진료", "처방", "증상", "질환"]
+
+        # 질문 패턴 (정규표현식)
+        question_patterns = [
+            r'\?',  # 물음표
+            r'[가-힣]+[을를]까요\?*',  # ~을까요, ~를까요
+            r'[가-힣]+[니나]까\?*',  # ~니까, ~나까
+            r'[가-힣]+세요\?*',  # ~세요?
+            r'[가-힣]+신가요\?*',  # ~신가요?
+            r'[가-힣]+시나요\?*',  # ~시나요?
+            r'[가-힣]+셨나요\?*',  # ~셨나요?
+            r'[가-힣]+있나요\?*',  # ~있나요?
+            r'[가-힣]+있으신가요\?*',  # ~있으신가요?
+            r'[가-힣]+있으셨나요\?*',  # ~있으셨나요?
+            r'어때.*\?*',  # 어때~
+            r'어떠.*\?*',  # 어떠~
+            r'어떻.*\?*',  # 어떻~
+            r'어떤.*\?*',  # 어떤~
+            r'혹시.*\?*',  # 혹시~
+        ]
 
         for element in expected_elements:
-            if element == "의료조언 회피":
-                # 의료 관련 키워드가 없으면 통과
+            element_score = 0.0
+
+            # 질문 관련 요소는 정규표현식으로 평가
+            if element in ["질문", "구체적 질문", "추가 질문"]:
+                has_question = any(re.search(pattern, response) for pattern in question_patterns)
+                if has_question:
+                    element_score = 1.0
+                else:
+                    element_score = 0.0
+
+            # 의료조언 회피
+            elif element == "의료조언 회피":
                 if not any(keyword in response for keyword in medical_keywords):
-                    score += 1
+                    element_score = 1.0
+                else:
+                    element_score = 0.0
+
+            # 키워드 기반 평가 (부분 점수)
             elif element in keywords_map:
-                if any(keyword in response for keyword in keywords_map[element]):
-                    score += 1
+                keyword_set = keywords_map[element]
+
+                # Strong 키워드 체크 (1.0점)
+                if any(keyword in response for keyword in keyword_set.get("strong", [])):
+                    element_score = 1.0
+                # Medium 키워드 체크 (0.7점)
+                elif any(keyword in response for keyword in keyword_set.get("medium", [])):
+                    element_score = 0.7
+                # Weak 키워드 체크 (0.5점)
+                elif any(keyword in response for keyword in keyword_set.get("weak", [])):
+                    element_score = 0.5
+                else:
+                    element_score = 0.0
+
+            score += element_score
 
         # 별점 계산
         ratio = score / max_score if max_score > 0 else 0
@@ -541,7 +622,7 @@ class AIResponseComparisonTest:
                             f.write(f"| **{config['config_name']}** | ")
                             f.write(f"{scenario['ai_response']} | ")
                             f.write(f"{scenario['user_emotion']} | ")
-                            f.write(f"{score}/{max_score} | ")
+                            f.write(f"{score:.1f}/{max_score} | ")
                             f.write(f"{stars} |\n")
 
                     f.write("\n---\n\n")
@@ -580,7 +661,7 @@ class AIResponseComparisonTest:
                     avg_stars = "⭐"
 
                 f.write(f"| **{config['config_name']}** | ")
-                f.write(f"{total_score}/{total_max} ({avg_ratio*100:.1f}%) | ")
+                f.write(f"{total_score:.1f}/{total_max} ({avg_ratio*100:.1f}%) | ")
                 f.write(f"{avg_stars} |\n")
 
             f.write("\n### 설정별 특징 분석\n\n")
