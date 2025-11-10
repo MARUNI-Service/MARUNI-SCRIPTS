@@ -337,32 +337,26 @@ class AIResponseComparisonTest:
         is_windows = platform.system() == 'Windows'
         gradle_cmd = 'gradlew.bat' if is_windows else './gradlew'
 
-        # 테스트할 설정 목록 (4가지 Profile 비교)
+        # 테스트할 설정 목록 (improved1 기반 개선 버전 비교)
         # test 프로필 사용 (H2 인메모리 DB, 빠른 시작)
         configs = [
             {
-                "name": "baseline",
-                "description": "Baseline - Temperature 0.7, 100자 제한, 기본 프롬프트",
-                "profile": "ai-baseline",
-                "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-baseline'"
-            },
-            {
                 "name": "improved1",
-                "description": "개선안 1: 시스템 프롬프트 고도화 (페르소나 '마루' 적용)",
+                "description": "Improved1 (이전 최고 성능, 73.3%) - 비교 기준",
                 "profile": "ai-improved1",
                 "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-improved1'"
             },
             {
-                "name": "improved2",
-                "description": "개선안 2: Temperature 0.9 + 응답 길이 200자로 확대",
-                "profile": "ai-improved2",
-                "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-improved2'"
+                "name": "improved1-v2",
+                "description": "Improved1 v2: 부정적 감정 + 건강 대화 프롬프트 강화",
+                "profile": "ai-improved1-v2",
+                "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-improved1-v2'"
             },
             {
-                "name": "improved3",
-                "description": "개선안 3: 통합 설정 (프롬프트 + 파라미터 모두 적용)",
-                "profile": "ai-improved3",
-                "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-improved3'"
+                "name": "improved1-v3",
+                "description": "Improved1 v3: v2 + Temperature 0.8 + max-tokens 120",
+                "profile": "ai-improved1-v3",
+                "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-improved1-v3'"
             }
         ]
 
@@ -592,27 +586,39 @@ class AIResponseComparisonTest:
             f.write("\n### 설정별 특징 분석\n\n")
             f.write("| 설정 | 장점 | 단점 |\n")
             f.write("|------|------|------|\n")
-            f.write("| **baseline** | 간결하고 빠른 응답 | 형식적, 대화 연결성 부족, 공감 표현 미흡 |\n")
-            f.write("| **improved_prompt** | 페르소나 명확, 공감 표현 증가, 자연스러운 대화 | - |\n")
-            f.write("| **improved_params** | 응답 다양성 증가, 표현이 풍부함 | 일관성 다소 감소 가능 |\n")
-            f.write("| **improved_combined** | 가장 인간적이고 자연스러운 응답, 맥락 이해 우수 | - |\n\n")
+            f.write("| **improved1** | 페르소나 명확, 공감 표현 증가, 자연스러운 대화 | 부정적 감정/건강 대화 개선 필요 |\n")
+            f.write("| **improved1-v2** | 부정적 감정 + 건강 대화 프롬프트 강화 | 파라미터는 동일 |\n")
+            f.write("| **improved1-v3** | v2 프롬프트 + 창의성 증가 (Temperature 0.8) | 일관성 감소 가능성 |\n\n")
 
-            # 권장 사항
+            # 권장 사항 (동적으로 최고 점수 설정 찾기)
             f.write("### 💡 권장 사항\n\n")
-            f.write("**최종 추천 설정**: `improved_combined` (개선안 3)\n\n")
-            f.write("**선정 이유**:\n")
-            f.write("- ✅ 가장 자연스럽고 공감적인 응답 생성\n")
-            f.write("- ✅ 이전 대화 컨텍스트를 효과적으로 활용\n")
-            f.write("- ✅ 노인 돌봄 서비스의 목적에 가장 부합\n")
-            f.write("- ✅ 사용자 경험 향상에 가장 효과적\n\n")
+
+            # 최고 점수 설정 찾기
+            best_config = None
+            best_score = 0
+            for config in self.results['configurations']:
+                total_score = sum(s.get('evaluation', {}).get('score', 0)
+                                for s in config['scenarios'])
+                total_max = sum(s.get('evaluation', {}).get('max_score', 3)
+                              for s in config['scenarios'])
+                avg_ratio = total_score / total_max if total_max > 0 else 0
+
+                if avg_ratio > best_score:
+                    best_score = avg_ratio
+                    best_config = config
+
+            if best_config:
+                f.write(f"**최종 추천 설정**: `{best_config['config_name']}`\n\n")
+                f.write(f"**성능**: {best_score*100:.1f}%\n\n")
+                f.write("**선정 이유**:\n")
+                f.write("- ✅ 테스트 시나리오에서 가장 높은 점수 달성\n")
+                f.write("- ✅ 공감적이고 자연스러운 응답 생성\n")
+                f.write("- ✅ 노인 돌봄 서비스의 목적에 부합\n\n")
 
             f.write("**적용 방법**:\n")
-            f.write("1. `application-ai.yml` 파일에서 다음 설정 적용:\n")
-            f.write("   - 시스템 프롬프트: 페르소나 '마루' 적용\n")
-            f.write("   - Temperature: 0.9로 조정\n")
-            f.write("   - 응답 길이: 200자로 확대\n")
-            f.write("2. 서버 재시작\n")
-            f.write("3. 실제 사용자 대상 베타 테스트 진행\n\n")
+            f.write("1. 추천 설정의 Profile을 production 환경에 적용\n")
+            f.write("2. 실제 사용자 대상 베타 테스트 진행\n")
+            f.write("3. 사용자 피드백 수집 및 추가 개선\n\n")
 
             # 부록
             f.write("---\n\n")
