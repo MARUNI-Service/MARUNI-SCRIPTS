@@ -7,6 +7,14 @@ MARUNI 프로젝트의 AI 대화 응답을 개선하기 위해
 다양한 설정으로 실제 API를 호출하고 응답을 비교 분석합니다.
 """
 
+import sys
+import io
+
+# Windows 환경에서 UTF-8 출력 지원
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import requests
 import json
 import time
@@ -42,30 +50,53 @@ class AIResponseComparisonTest:
             bool: 성공 여부
         """
         timestamp = int(time.time())
+        email = f"test_ai_{timestamp}@maruni.test"
+        password = "Test1234!"
+
         signup_data = {
-            "loginId": f"test_ai_{timestamp}",
-            "password": "Test1234!",
-            "name": "AI테스트사용자",
-            "phoneNumber": f"010{timestamp % 100000000:08d}"
+            "memberEmail": email,
+            "memberName": "AI테스트사용자",
+            "memberPassword": password,
+            "dailyCheckEnabled": True
         }
 
         try:
-            print(f"👤 테스트 사용자 생성 중... (ID: {signup_data['loginId']})")
+            print(f"👤 테스트 사용자 생성 중... (Email: {email})")
 
+            # 1. 회원가입
             response = requests.post(
-                f"{self.base_url}/api/auth/signup",
+                f"{self.base_url}/api/join",
                 json=signup_data,
                 timeout=10
             )
 
-            if response.status_code == 200:
-                result = response.json()
+            if response.status_code != 200:
+                print(f"❌ 회원가입 실패: {response.status_code}")
+                print(f"   응답: {response.text}")
+                return False
+
+            print(f"✅ 회원가입 성공!")
+
+            # 2. 로그인
+            login_data = {
+                "memberEmail": email,
+                "memberPassword": password
+            }
+
+            login_response = requests.post(
+                f"{self.base_url}/api/auth/login",
+                json=login_data,
+                timeout=10
+            )
+
+            if login_response.status_code == 200:
+                result = login_response.json()
                 self.access_token = result["data"]["accessToken"]
                 print(f"✅ 로그인 성공! (Token: {self.access_token[:20]}...)")
                 return True
             else:
-                print(f"❌ 회원가입 실패: {response.status_code}")
-                print(f"   응답: {response.text}")
+                print(f"❌ 로그인 실패: {login_response.status_code}")
+                print(f"   응답: {login_response.text}")
                 return False
 
         except Exception as e:
@@ -188,7 +219,7 @@ class AIResponseComparisonTest:
                 response = self.send_message(msg["message"])
 
                 if response:
-                    ai_msg = response["aiResponse"]["content"]
+                    ai_msg = response["aiMessage"]["content"]
                     print(f"     [{i}] AI: {ai_msg}")
                     time.sleep(1)  # API 호출 간격
                 else:
@@ -226,7 +257,7 @@ class AIResponseComparisonTest:
 
         # 응답 추출
         user_msg = response["userMessage"]
-        ai_msg = response["aiResponse"]
+        ai_msg = response["aiMessage"]
 
         print(f"  🤖 AI 응답: '{ai_msg['content']}'")
         print(f"  😊 감정 분석: {user_msg['emotion']}")
@@ -301,23 +332,37 @@ class AIResponseComparisonTest:
 
         print("✅ 서버 연결 확인 완료\n")
 
-        # 테스트할 설정 목록
+        # Windows/Unix 명령어 감지
+        import platform
+        is_windows = platform.system() == 'Windows'
+        gradle_cmd = 'gradlew.bat' if is_windows else './gradlew'
+
+        # 테스트할 설정 목록 (4가지 Profile 비교)
+        # test 프로필 사용 (H2 인메모리 DB, 빠른 시작)
         configs = [
             {
                 "name": "baseline",
-                "description": "현재 설정 (Baseline) - Temperature 0.7, 30자 제한",
+                "description": "Baseline - Temperature 0.7, 100자 제한, 기본 프롬프트",
+                "profile": "ai-baseline",
+                "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-baseline'"
             },
             {
-                "name": "improved_prompt",
+                "name": "improved1",
                 "description": "개선안 1: 시스템 프롬프트 고도화 (페르소나 '마루' 적용)",
+                "profile": "ai-improved1",
+                "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-improved1'"
             },
             {
-                "name": "improved_params",
+                "name": "improved2",
                 "description": "개선안 2: Temperature 0.9 + 응답 길이 200자로 확대",
+                "profile": "ai-improved2",
+                "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-improved2'"
             },
             {
-                "name": "improved_combined",
+                "name": "improved3",
                 "description": "개선안 3: 통합 설정 (프롬프트 + 파라미터 모두 적용)",
+                "profile": "ai-improved3",
+                "command": f"{gradle_cmd} bootRun --args='--spring.profiles.active=test,ai,ai-improved3'"
             }
         ]
 
@@ -327,34 +372,27 @@ class AIResponseComparisonTest:
             print(f"# 진행 상황: {i}/{len(configs)}")
             print(f"{'#'*70}")
 
-            # 설정 변경 안내
-            if i > 1:
-                print(f"\n⚙️  설정 변경이 필요합니다!")
-                print(f"\n📋 변경 사항:")
-                print(f"   파일: src/main/resources/application-ai.yml")
-
-                if config["name"] == "improved_prompt":
-                    print(f"\n   변경 내용:")
-                    print(f"   maruni.conversation.ai.system-prompt:")
-                    print(f'     "당신은 \'마루\'라는 이름의 따뜻한 AI 친구입니다.')
-                    print(f'      70대 이상 어르신과 매일 안부를 나누는 친근한 대화 상대입니다.')
-                    print(f'      이전 대화를 자연스럽게 언급하고, 공감과 격려 중심으로 대화하세요."')
-
-                elif config["name"] == "improved_params":
-                    print(f"\n   변경 내용:")
-                    print(f"   spring.ai.openai.chat.options.temperature: 0.9")
-                    print(f"   spring.ai.openai.chat.options.max-tokens: 150")
-                    print(f"   maruni.conversation.ai.max-response-length: 200")
-
-                elif config["name"] == "improved_combined":
-                    print(f"\n   변경 내용: 개선안 1 + 개선안 2 모두 적용")
-
-                print(f"\n📌 단계:")
-                print(f"   1. application-ai.yml 파일 수정")
-                print(f"   2. 서버 재시작 (Ctrl+C 후 ./gradlew bootRun)")
-                print(f"   3. 서버가 완전히 시작될 때까지 대기")
-
+            # 설정 변경 안내 (Profile 기반)
+            if i == 1:
+                print(f"\n🎯 첫 번째 테스트를 시작합니다!")
+                print(f"\n📋 Profile: {config['profile']}")
+                print(f"📝 설명: {config['description']}")
+                print(f"\n⚠️  서버가 다음 명령어로 실행되고 있는지 확인하세요:")
+                print(f"\n   {config['command']}")
+                print(f"\n💡 다른 프로필로 실행 중이라면 서버를 재시작해주세요.")
                 input(f"\n✋ 준비가 완료되면 Enter를 눌러 테스트를 시작하세요...")
+            elif i > 1:
+                print(f"\n⚙️  서버 재시작이 필요합니다!")
+                print(f"\n📋 새로운 Profile: {config['profile']}")
+                print(f"📝 설명: {config['description']}")
+                print(f"\n📌 서버 재시작 방법:")
+                print(f"   1. 기존 서버 중지 (Ctrl+C)")
+                print(f"   2. 다음 명령어로 서버 재시작:")
+                print(f"\n      {config['command']}")
+                print(f"\n   3. 서버가 완전히 시작될 때까지 대기 (1-2분)")
+                print(f"      - 확인: http://localhost:8080/actuator/health")
+
+                input(f"\n✋ 서버 재시작이 완료되면 Enter를 눌러 테스트를 시작하세요...")
 
             # 테스트 실행
             config_result = self.test_all_scenarios_with_config(

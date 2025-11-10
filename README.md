@@ -4,6 +4,11 @@ MARUNI 프로젝트의 AI 대화 응답을 다양한 설정으로 테스트하�
 
 ## 📋 개요
 
+**✨ 새로운 기능: Spring Profiles 자동 전환!**
+- 더 이상 `application-ai.yml` 파일을 수동으로 수정할 필요가 없습니다
+- Profile만 전환하면 자동으로 설정 적용
+- 더 빠르고 안전한 테스트 프로세스
+
 이 스크립트는 다음 작업을 자동화합니다:
 
 1. **5개 시나리오 테스트**
@@ -36,12 +41,23 @@ python --version
 pip install -r requirements.txt
 ```
 
-### 2. 서버 실행
+### 2. 서버 실행 (Baseline Profile, Test 환경)
+
+첫 테스트를 위해 **Test 환경 + Baseline Profile**로 서버를 실행합니다:
 
 ```bash
 # 프로젝트 루트 디렉토리에서
-./gradlew bootRun
+./gradlew bootRun --args='--spring.profiles.active=test,ai,ai-baseline'
+
+# Windows 환경
+gradlew.bat bootRun --args='--spring.profiles.active=test,ai,ai-baseline'
 ```
+
+**💡 Test 환경의 장점**:
+- ✅ **H2 인메모리 DB** 사용 → PostgreSQL/Docker 불필요
+- ✅ **빠른 시작** → 1-2초 내 실행
+- ✅ **데이터 격리** → 매번 깨끗한 상태로 테스트
+- ✅ **설치 불필요** → 바로 실행 가능
 
 서버가 완전히 시작될 때까지 기다립니다 (http://localhost:8080)
 
@@ -66,9 +82,8 @@ python ai_response_comparison_test.py
    → 5개 시나리오 자동 테스트
    → 완료
 
-2. 설정 변경 안내 표시
-   → application-ai.yml 수정
-   → 서버 재시작
+2. Profile 변경 안내 표시
+   → 서버 재시작 (새로운 Profile로)
    → Enter 입력하여 계속
 
 3. [개선안 1] 테스트 시작
@@ -82,47 +97,51 @@ python ai_response_comparison_test.py
    → Markdown 보고서 생성
 ```
 
-### 설정 변경 가이드
+### 설정 변경 가이드 (Spring Profiles 사용)
+
+이제 `application-ai.yml` 파일을 수정할 필요 없이, **Spring Profile만 전환**하면 됩니다!
 
 #### 개선안 1: 시스템 프롬프트 고도화
 
-`src/main/resources/application-ai.yml` 파일 수정:
+**Profile**: `ai-improved1`
 
-```yaml
-maruni:
-  conversation:
-    ai:
-      system-prompt: |
-        당신은 '마루'라는 이름의 따뜻한 AI 친구입니다.
-        70대 이상 어르신과 매일 안부를 나누는 친근한 대화 상대입니다.
+```bash
+# 서버 재시작 시
+./gradlew bootRun --args='--spring.profiles.active=test,ai,ai-improved1'
 
-        대화 스타일:
-        - 존댓말 사용, 친절하고 다정한 어조
-        - 이전 대화 내용을 자연스럽게 언급
-        - 공감과 격려 중심
-        - 질문으로 대화 이어가기
+# Windows
+gradlew.bat bootRun --args='--spring.profiles.active=test,ai,ai-improved1'
 ```
+
+설정 파일: `src/main/resources/application-ai-improved1.yml` (자동 적용)
 
 #### 개선안 2: Temperature + 응답 길이 조정
 
-```yaml
-spring:
-  ai:
-    openai:
-      chat:
-        options:
-          temperature: 0.9  # 0.7 → 0.9
-          max-tokens: 150   # 100 → 150
+**Profile**: `ai-improved2`
 
-maruni:
-  conversation:
-    ai:
-      max-response-length: 200  # 100 → 200
+```bash
+# 서버 재시작 시
+./gradlew bootRun --args='--spring.profiles.active=test,ai,ai-improved2'
+
+# Windows
+gradlew.bat bootRun --args='--spring.profiles.active=test,ai,ai-improved2'
 ```
+
+설정 파일: `src/main/resources/application-ai-improved2.yml` (자동 적용)
 
 #### 개선안 3: 통합 설정
 
-개선안 1 + 개선안 2 모두 적용
+**Profile**: `ai-improved3`
+
+```bash
+# 서버 재시작 시
+./gradlew bootRun --args='--spring.profiles.active=test,ai,ai-improved3'
+
+# Windows
+gradlew.bat bootRun --args='--spring.profiles.active=test,ai,ai-improved3'
+```
+
+설정 파일: `src/main/resources/application-ai-improved3.yml` (자동 적용)
 
 ## 📊 결과 확인
 
@@ -173,8 +192,9 @@ tester = AIResponseComparisonTest(base_url="http://your-server:8080")
    - 총 30-40분 예상 (설정 변경 시간 포함)
 
 3. **서버 재시작 필수**
-   - 각 설정 변경 후 반드시 서버 재시작 필요
-   - Spring Boot 설정은 런타임 변경 불가
+   - 각 Profile 변경 시 반드시 서버 재시작 필요
+   - Spring Boot Profile은 런타임 변경 불가
+   - 스크립트가 명령어를 자동으로 안내합니다
 
 4. **대화 이력**
    - 각 시나리오는 새로운 사용자로 테스트

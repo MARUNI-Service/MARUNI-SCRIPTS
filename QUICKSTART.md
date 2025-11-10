@@ -22,18 +22,26 @@ cd scripts
 pip install -r requirements.txt
 ```
 
-### 3. 서버 실행
+### 3. 서버 실행 (Test 환경 + Baseline Profile)
 
-**새 터미널을 열어서** 서버를 실행합니다:
+**새 터미널을 열어서** 서버를 **Test 환경**으로 실행합니다:
 
 ```bash
 # 프로젝트 루트 디렉토리에서
-./gradlew bootRun
+./gradlew bootRun --args='--spring.profiles.active=test,ai,ai-baseline'
+
+# Windows 환경
+gradlew.bat bootRun --args='--spring.profiles.active=test,ai,ai-baseline'
 ```
 
-서버가 완전히 시작될 때까지 기다립니다 (1-2분).
+서버가 완전히 시작될 때까지 기다립니다 (약 30초).
 
 확인 방법: 브라우저에서 http://localhost:8080/actuator/health 접속
+
+**✨ Test 환경의 장점**:
+- **DB 설치 불필요** → H2 인메모리 DB 자동 사용
+- **빠른 시작** → Docker나 PostgreSQL 없이 즉시 실행
+- **데이터 격리** → 매번 깨끗한 상태로 테스트
 
 ---
 
@@ -58,71 +66,75 @@ python ai_response_comparison_test.py
 스크립트가 다음과 같이 표시합니다:
 
 ```
-⚙️  설정 변경이 필요합니다!
+⚙️  서버 재시작이 필요합니다!
 
-📋 변경 사항:
-   파일: src/main/resources/application-ai.yml
+📋 새로운 Profile: ai-improved1
+📝 설명: 개선안 1: 시스템 프롬프트 고도화 (페르소나 '마루' 적용)
 
-   변경 내용:
-   maruni.conversation.ai.system-prompt:
-     "당신은 '마루'라는 이름의 따뜻한 AI 친구입니다.
-      ..."
+📌 서버 재시작 방법:
+   1. 기존 서버 중지 (Ctrl+C)
+   2. 다음 명령어로 서버 재시작:
 
-📌 단계:
-   1. application-ai.yml 파일 수정
-   2. 서버 재시작 (Ctrl+C 후 ./gradlew bootRun)
-   3. 서버가 완전히 시작될 때까지 대기
+      ./gradlew bootRun --args='--spring.profiles.active=test,ai,ai-improved1'
 
-✋ 준비가 완료되면 Enter를 눌러 테스트를 시작하세요...
+   3. 서버가 완전히 시작될 때까지 대기 (1-2분)
+      - 확인: http://localhost:8080/actuator/health
+
+✋ 서버 재시작이 완료되면 Enter를 눌러 테스트를 시작하세요...
 ```
 
 **할 일:**
 
-1. **VS Code에서** `src/main/resources/application-ai.yml` 파일 열기
-
-2. `scripts/config/improved_prompt_config.yml` 파일 내용을 복사
-
-3. `application-ai.yml`의 해당 부분에 붙여넣기
-
-4. **터미널 1**에서:
+1. **터미널 1**에서:
    ```bash
    # Ctrl+C로 서버 중지
-   ./gradlew bootRun  # 서버 재시작
+
+   # 새로운 Profile로 서버 재시작
+   ./gradlew bootRun --args='--spring.profiles.active=test,ai,ai-improved1'
+
+   # Windows 환경
+   gradlew.bat bootRun --args='--spring.profiles.active=test,ai,ai-improved1'
    ```
 
-5. 서버가 완전히 시작되면 **터미널 2**에서 **Enter** 입력
+2. 서버가 완전히 시작되면 **터미널 2**에서 **Enter** 입력
 
 스크립트가 다시 5개 시나리오를 테스트합니다 (약 5분).
+
+**💡 더 이상 yml 파일을 수정할 필요가 없습니다!**
 
 ---
 
 ### 3단계: 개선안 2 테스트 (파라미터 조정)
 
-같은 방식으로:
+같은 방식으로 Profile만 변경:
 
-1. `scripts/config/improved_params_config.yml` 내용 확인
+```bash
+# Ctrl+C로 서버 중지 후
 
-2. `application-ai.yml` 수정:
-   ```yaml
-   spring.ai.openai.chat.options.temperature: 0.9
-   spring.ai.openai.chat.options.max-tokens: 150
-   maruni.conversation.ai.max-response-length: 200
-   ```
+./gradlew bootRun --args='--spring.profiles.active=test,ai,ai-improved2'
 
-3. 서버 재시작
+# Windows
+gradlew.bat bootRun --args='--spring.profiles.active=test,ai,ai-improved2'
+```
 
-4. Enter 입력
+서버 시작 후 **Enter** 입력
 
 ---
 
 ### 4단계: 개선안 3 테스트 (통합)
 
-1. `scripts/config/improved_combined_config.yml` 내용 적용
-   - 프롬프트 + 파라미터 모두 변경
+마지막 Profile 변경:
 
-2. 서버 재시작
+```bash
+# Ctrl+C로 서버 중지 후
 
-3. Enter 입력
+./gradlew bootRun --args='--spring.profiles.active=test,ai,ai-improved3'
+
+# Windows
+gradlew.bat bootRun --args='--spring.profiles.active=test,ai,ai-improved3'
+```
+
+서버 시작 후 **Enter** 입력
 
 ---
 
